@@ -19,7 +19,11 @@
 ---
 
 ## Directory Structure
-- `bom/`: Bill of Materials with components, suppliers, interfaces, power specs, and estimated costs.
-- `diagrams/`: Electrical, signal, and USB topology schematics.
-- `mechanical/`: Physical dimensions, frame mounting, bezel cutouts, and airflow cooling layout.
-- `tests/`: Physical hardware verification checklists.
+- `bom/`: [BOM.md](bom/BOM.md) with components, suppliers, interfaces, power specs, and estimated costs.
+- `diagrams/`: [wiring_and_connections.md](diagrams/wiring_and_connections.md) electrical, signal, and USB topology schematics.
+- `mechanical/`:
+  - [enclosure_specs.md](mechanical/enclosure_specs.md): Physical dimensions, frame mounting, and airflow cooling layout.
+  - [camera_geometry_and_fov.md](mechanical/camera_geometry_and_fov.md): 7° downward tilt calculation and 1.8m standing FOV envelope.
+- `tests/`:
+  - [hardware_checklist.md](tests/hardware_checklist.md): Physical trial-room readiness checklist.
+  - [camera_display_verification_procedure.md](tests/camera_display_verification_procedure.md): Physical calibration and simulation verification protocols.
