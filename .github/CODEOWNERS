@@ -1,0 +1,21 @@
+# MIRAI CODEOWNERS
+# Defines explicit role ownership for each domain.
+# Every modification to a role directory requires review and approval from its owner.
+
+# Global / Shared Architecture Docs & Governance
+/docs/                   @octacept/lead-sai
+/.github/                @octacept/lead-sai
+README.md                @octacept/lead-sai
+.env.example             @octacept/lead-sai
+
+# Role 1: AI / Computer Vision
+/ai/                     @octacept/ai-cv-intern
+
+# Role 2: Frontend / AR
+/frontend/               @octacept/frontend-ar-intern
+
+# Role 3: Backend
+/backend/                @octacept/backend-intern
+
+# Role 4: Hardware / Embedded
+/hardware/               @octacept/hardware-intern @chandu-hardware
