@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CameraBackdrop } from './CameraBackdrop';
 import { SkeletonCanvas } from './SkeletonCanvas';
+import { GarmentCanvas } from './GarmentCanvas';
 import { ProductCatalogDrawer } from './ProductCatalogDrawer';
 import { useCamera } from '../hooks/useCamera';
 import { usePoseStream } from '../hooks/usePoseStream';
 import { useCatalog } from '../hooks/useCatalog';
+import { DEFAULT_GARMENTS, GarmentMetadata } from '../rendering/GarmentAsset';
 
 export const MirrorView: React.FC = () => {
   const { videoRef, isActive: isCameraActive, error: cameraError } = useCamera();
@@ -21,7 +23,28 @@ export const MirrorView: React.FC = () => {
     refreshCatalog
   } = useCatalog();
 
-  const [showSkeleton, setShowSkeleton] = useState<boolean>(true);
+  const [showSkeleton, setShowSkeleton] = useState<boolean>(false);
+  const [showGarment, setShowGarment] = useState<boolean>(true);
+
+  // Map selected product to garment metadata with fallback
+  const activeGarment: GarmentMetadata | null = useMemo(() => {
+    if (!selectedProduct) return DEFAULT_GARMENTS.oct_jkt_001;
+
+    // Check if customized metadata exists for this product ID
+    if (DEFAULT_GARMENTS[selectedProduct.id]) {
+      return DEFAULT_GARMENTS[selectedProduct.id];
+    }
+
+    // Default garment dynamic adapter for jacket/outerwear categories
+    return {
+      id: selectedProduct.id,
+      name: selectedProduct.name,
+      category: selectedProduct.category_id,
+      assetUrl: DEFAULT_GARMENTS.oct_jkt_001.assetUrl, // Reuses front-facing clean bomber silhouette
+      anchorConfig: { anchorX: 0.5, anchorY: 0.28 },
+      calibration: { scaleMultiplier: 2.2, xOffset: 0.0, yOffset: -0.02, rotationOffsetDeg: 0.0 }
+    };
+  }, [selectedProduct]);
 
   // Status badge styling
   const stateBadgeColor =
@@ -36,23 +59,43 @@ export const MirrorView: React.FC = () => {
       {/* 1. Live Camera Feed Layer */}
       <CameraBackdrop videoRef={videoRef} isActive={isCameraActive} error={cameraError} />
 
-      {/* 2. Real-time Skeleton Overlay Layer */}
+      {/* 2. Phase 2 Real-Time AR Virtual Garment Fitting Layer */}
+      <GarmentCanvas
+        trackingFrame={trackingFrame}
+        garment={activeGarment}
+        visible={showGarment}
+      />
+
+      {/* 3. Real-time Skeleton Overlay Layer (Optional debug mode) */}
       <SkeletonCanvas trackingFrame={trackingFrame} visible={showSkeleton} />
 
-      {/* 3. Top Header & Telemetry Layer */}
+      {/* 4. Top Header & Telemetry Layer */}
       <header className="z-20 flex justify-between items-center bg-black/60 backdrop-blur-md px-6 py-4 rounded-3xl border border-white/10 shadow-xl">
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-xl font-black tracking-widest text-white">MIRAI</h1>
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-              Phase 1 Live
+              Phase 2 AR Live
             </span>
           </div>
-          <p className="text-[11px] text-neutral-400 mt-0.5">OCTACEPT • Try Beyond Reality</p>
+          <p className="text-[11px] text-neutral-400 mt-0.5">
+            {activeGarment ? `Wearing: ${activeGarment.name}` : 'OCTACEPT • Try Beyond Reality'}
+          </p>
         </div>
 
-        {/* Telemetry metrics bar */}
-        <div className="flex items-center space-x-4">
+        {/* Telemetry & toggle controls */}
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setShowGarment((prev) => !prev)}
+            className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+              showGarment
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
+                : 'bg-white/5 text-neutral-400 border-white/10'
+            }`}
+          >
+            Garment: {showGarment ? 'ON' : 'OFF'}
+          </button>
+
           <button
             onClick={() => setShowSkeleton((prev) => !prev)}
             className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
@@ -71,6 +114,11 @@ export const MirrorView: React.FC = () => {
             <div>
               Conf: <span className="text-cyan-400 font-bold">{(trackingFrame.confidence * 100).toFixed(0)}%</span>
             </div>
+            {trackingFrame.body_anchors && (
+              <div>
+                Tilt: <span className="text-amber-400 font-bold">{trackingFrame.body_anchors.shoulder_angle_deg.toFixed(1)}°</span>
+              </div>
+            )}
           </div>
 
           <div
@@ -81,7 +129,7 @@ export const MirrorView: React.FC = () => {
         </div>
       </header>
 
-      {/* 4. Bottom Product Catalog Drawer */}
+      {/* 5. Bottom Product Catalog Drawer */}
       <ProductCatalogDrawer
         categories={categories}
         products={products}
