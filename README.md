@@ -23,25 +23,39 @@ The project enforces an **absolute ownership rule** across four distinct domains
 
 ---
 
-## Repository Structure
+## Repository Structure & Team Ownership
 
-```
-smart-trail-room/
+```text
+MIRAI/
+├── frontend/  → Frontend / AR
+│   ├── src/
+│   ├── package.json
+│   └── ...
+├── backend/   → Backend / API
+│   ├── app/
+│   ├── tests/
+│   └── ...
+├── ai/        → AI / Computer Vision
+│   ├── pose/
+│   ├── tracking/
+│   ├── vision/
+│   └── tests/
+├── hardware/  → Hardware / Embedded
+│   ├── bom/
+│   ├── diagrams/
+│   ├── mechanical/
+│   └── tests/
+├── docs/      → Shared Documentation
+│   ├── ARCHITECTURE.md
+│   ├── TEAM_ROLES.md
+│   ├── INTEGRATION_CONTRACTS.md
+│   ├── API_CONTRACT.md
+│   └── MVP_ROADMAP.md
 ├── .github/
-│   └── CODEOWNERS              # Explicit code review ownership
-├── docs/
-│   ├── ARCHITECTURE.md         # End-to-end system design & privacy
-│   ├── TEAM_ROLES.md           # Roles, boundaries, and change protocol
-│   ├── INTEGRATION_CONTRACTS.md# AI -> Frontend & Hardware -> Software
-│   ├── API_CONTRACT.md         # Backend REST API definitions
-│   └── MVP_ROADMAP.md          # Phases 0 through 5 roadmap
-├── ai/                         # Role 1: AI / Computer Vision
-├── frontend/                   # Role 2: Frontend / AR
-├── backend/                    # Role 3: Backend & Database
-├── hardware/                   # Role 4: Hardware specs, BOM, diagrams
+│   └── CODEOWNERS              # Explicit team code review ownership
 ├── .env.example                # Shared environment configuration template
-├── .gitignore                  # Global ignore rules
-└── README.md                   # This file
+├── .gitignore                  # Global Git ignore rules
+└── README.md                   # Project documentation & setup guide
 ```
 
 ---
