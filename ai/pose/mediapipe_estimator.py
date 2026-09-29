@@ -1,7 +1,7 @@
 """
 MediaPipe Pose Estimation pipeline for MIRAI AI subsystem.
 Extracts 33 normalized body landmarks, calculates confidence, applies EMA smoothing,
-and outputs structured TrackingFrame packets.
+derives body anchors for virtual garment fitting, and outputs structured TrackingFrame packets.
 """
 from typing import Any, List, Optional
 import time
@@ -9,6 +9,7 @@ import time
 from .interface import BasePoseEstimator
 from ..tracking.models import Landmark, TrackingFrame, TrackingState
 from ..tracking.smoothing import LandmarkSmoother
+from ..tracking.anchors import BodyAnchors, BodyAnchorExtractor
 
 # Canonical 33 MediaPipe pose landmark names
 MEDIAPIPE_LANDMARK_NAMES = [
@@ -29,7 +30,7 @@ KEY_TORSO_LANDMARK_IDS = [11, 12, 23, 24]  # left/right shoulders & hips
 
 class MediaPipePoseEstimator(BasePoseEstimator):
     """
-    Production MediaPipe pose estimator pipeline.
+    Production MediaPipe pose estimator pipeline with Phase 2 Body Geometry extraction.
     """
 
     def __init__(
@@ -43,6 +44,7 @@ class MediaPipePoseEstimator(BasePoseEstimator):
         self.min_tracking_confidence = min_tracking_confidence
         self.model_complexity = model_complexity
         self.smoother = LandmarkSmoother(alpha=smoothing_alpha)
+        self.anchor_extractor = BodyAnchorExtractor()
         self._mp_pose = None
         self._pose_instance = None
         self._previous_state = TrackingState.SEARCHING
@@ -120,17 +122,23 @@ class MediaPipePoseEstimator(BasePoseEstimator):
             else:
                 confidence = sum(lm.visibility for lm in raw_landmarks) / len(raw_landmarks)
 
-        # Determine Tracking State transition
+        # Determine Tracking State transition & Body Anchors
+        body_anchors: Optional[BodyAnchors] = None
+
         if confidence >= 0.5 and len(raw_landmarks) >= 15:
             current_state = TrackingState.TRACKED
             smoothed_landmarks = self.smoother.smooth(raw_landmarks)
+            body_anchors = self.anchor_extractor.extract(smoothed_landmarks)
         elif self._previous_state == TrackingState.TRACKED and confidence < 0.3:
             current_state = TrackingState.LOST
             self.smoother.reset()
+            self.anchor_extractor.reset()
             smoothed_landmarks = []
+            body_anchors = None
         else:
             current_state = TrackingState.SEARCHING
             smoothed_landmarks = []
+            body_anchors = None
 
         self._previous_state = current_state
 
@@ -142,7 +150,8 @@ class MediaPipePoseEstimator(BasePoseEstimator):
             fps=round(self._fps, 2),
             confidence=round(confidence, 4),
             tracking_state=current_state,
-            landmarks=smoothed_landmarks
+            landmarks=smoothed_landmarks,
+            body_anchors=body_anchors
         )
 
     def release(self) -> None:
@@ -151,3 +160,4 @@ class MediaPipePoseEstimator(BasePoseEstimator):
             self._pose_instance.close()
             self._pose_instance = None
         self.smoother.reset()
+        self.anchor_extractor.reset()

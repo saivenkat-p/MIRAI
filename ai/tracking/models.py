@@ -1,10 +1,10 @@
 """
 Data models defining the AI -> Frontend TrackingFrame contract.
-Matches specifications in /docs/INTEGRATION_CONTRACTS.md.
+Matches specifications in /docs/INTEGRATION_CONTRACTS.md and Phase 2 Body Geometry extensions.
 """
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Any
 import json
 
 
@@ -40,9 +40,10 @@ class TrackingFrame:
     confidence: float
     tracking_state: TrackingState
     landmarks: List[Landmark] = field(default_factory=list)
+    body_anchors: Optional[Any] = None  # BodyAnchors if computed
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "timestamp": self.timestamp,
             "frame_id": self.frame_id,
             "frame_width": self.frame_width,
@@ -52,6 +53,13 @@ class TrackingFrame:
             "tracking_state": self.tracking_state.value if isinstance(self.tracking_state, TrackingState) else str(self.tracking_state),
             "landmarks": [lm.to_dict() for lm in self.landmarks]
         }
+        if self.body_anchors is not None:
+            out["body_anchors"] = (
+                self.body_anchors.to_dict()
+                if hasattr(self.body_anchors, "to_dict")
+                else self.body_anchors
+            )
+        return out
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict())
@@ -69,6 +77,15 @@ class TrackingFrame:
             )
             for lm in data.get("landmarks", [])
         ]
+
+        body_anchors = None
+        if "body_anchors" in data and data["body_anchors"] is not None:
+            try:
+                from .anchors import BodyAnchors
+                body_anchors = BodyAnchors.from_dict(data["body_anchors"])
+            except Exception:
+                body_anchors = data["body_anchors"]
+
         return cls(
             timestamp=data["timestamp"],
             frame_id=data.get("frame_id", 0),
@@ -77,5 +94,6 @@ class TrackingFrame:
             fps=float(data.get("fps", 30.0)),
             confidence=float(data.get("confidence", 0.0)),
             tracking_state=TrackingState(data.get("tracking_state", "searching")),
-            landmarks=landmarks
+            landmarks=landmarks,
+            body_anchors=body_anchors
         )
