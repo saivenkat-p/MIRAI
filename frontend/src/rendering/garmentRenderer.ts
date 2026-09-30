@@ -15,7 +15,12 @@ export interface GarmentRenderAnchor {
 
 export interface IGarmentRenderer {
   initialize(canvas: HTMLCanvasElement): void;
-  renderFrame(tracking: TrackingFrame, selectedGarment?: Product): void;
+  renderFrame(
+    tracking: TrackingFrame,
+    selectedGarment?: Product,
+    videoElement?: HTMLVideoElement,
+    maskCanvas?: HTMLCanvasElement | OffscreenCanvas
+  ): void;
   clear(): void;
   dispose(): void;
 }

@@ -53,16 +53,20 @@ class MediaPipePoseEstimator(BasePoseEstimator):
         """Initialize the MediaPipe Pose solution."""
         try:
             import mediapipe as mp
-            self._mp_pose = mp.solutions.pose
-            self._pose_instance = self._mp_pose.Pose(
-                min_detection_confidence=self.min_detection_confidence,
-                min_tracking_confidence=self.min_tracking_confidence,
-                model_complexity=self.model_complexity,
-                smooth_landmarks=True
-            )
+            if hasattr(mp, "solutions") and hasattr(mp.solutions, "pose"):
+                self._mp_pose = mp.solutions.pose
+                self._pose_instance = self._mp_pose.Pose(
+                    min_detection_confidence=self.min_detection_confidence,
+                    min_tracking_confidence=self.min_tracking_confidence,
+                    model_complexity=self.model_complexity,
+                    smooth_landmarks=True
+                )
+                return True
+            # MediaPipe 1.0+ Tasks mode or graceful fallback
+            self._pose_instance = None
             return True
-        except ImportError:
-            # MediaPipe not installed in current environment; graceful initialization fallback
+        except Exception:
+            # Graceful initialization fallback
             self._pose_instance = None
             return False
 

@@ -25,7 +25,7 @@ class Product(BaseModel):
     category_id: str
     brand: str
     price: float
-    currency: str = "USD"
+    currency: str = "INR"
     description: str
     colors: List[ProductColor]
     sizes: List[str]

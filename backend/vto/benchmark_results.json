@@ -1,0 +1,50 @@
+{
+  "hardware": {
+    "device": "cpu",
+    "device_name": "CPU Fallback",
+    "is_cuda": false,
+    "total_vram_mb": 0.0,
+    "pytorch_version": "2.13.0+cpu"
+  },
+  "iterations": 50,
+  "input_resolution": "1280x720",
+  "garment_tested": "OCT-SHT-002",
+  "metrics": {
+    "preprocessing_ms": {
+      "mean": 0.0,
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "p95": 0.0
+    },
+    "inference_ms": {
+      "mean": 55.95,
+      "median": 55.34,
+      "min": 41.94,
+      "max": 69.13,
+      "p95": 64.84
+    },
+    "postprocessing_ms": {
+      "mean": 34.74,
+      "median": 34.82,
+      "min": 28.81,
+      "max": 44.38,
+      "p95": 39.48
+    },
+    "total_pipeline_ms": {
+      "mean": 90.69,
+      "median": 90.16,
+      "min": 76.67,
+      "max": 108.3,
+      "p95": 103.6
+    },
+    "measured_fps": 11.0
+  },
+  "architectural_status": {
+    "pytorch_gpu_grid_sample": "VERIFIED & MEASURED",
+    "pose_to_surface_mapping": "VERIFIED & MEASURED",
+    "densepose_checkpoint": "NOT IMPLEMENTED \u2014 ARCHITECTURAL PLACEHOLDER",
+    "tensorrt_fp16": "NOT IMPLEMENTED \u2014 ARCHITECTURAL PLACEHOLDER",
+    "cloth_physics_wrinkle_synthesis": "NOT IMPLEMENTED \u2014 ARCHITECTURAL PLACEHOLDER"
+  }
+}

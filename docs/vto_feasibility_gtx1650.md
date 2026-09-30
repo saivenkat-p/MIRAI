@@ -188,7 +188,7 @@
                                │  HTML5 Canvas / WebGL:                                   │
                                │  Render 1280x720 Try-On Output                           │
                                │  HUD Overlay: Size selector, product details, price      │
-                               └─────────────────────────┬────────────────────────────────┘
+                               └──────────────────────────────────────────────────────────┘
 ```
 
 ---

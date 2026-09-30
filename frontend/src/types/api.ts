@@ -1,5 +1,5 @@
 /**
- * Frontend -> Backend REST API contracts.
+ * Frontend → Backend REST API contracts.
  * Strictly mirrors /docs/API_CONTRACT.md
  */
 
@@ -49,4 +49,33 @@ export interface SavedLookResponse {
   look_id: string;
   qr_url: string;
   shareable_code: string;
+}
+
+// ── Virtual Try-On ────────────────────────────────────────────────────────
+
+export interface TryOnRequest {
+  /** Base-64 encoded JPEG captured from the customer's webcam. */
+  person_image_b64: string;
+  /** Product ID or SKU to be tried on. */
+  product_id: string;
+  /** Optional session ID for analytics. */
+  session_id?: string;
+}
+
+export interface TryOnResponse {
+  /** Base-64 encoded PNG of the try-on result image. */
+  result_image_b64: string;
+  /** The product ID that was processed. */
+  product_id: string;
+  /**
+   * 'demo'  — Pillow composite produced by DemoVirtualTryOnService. NOT real AI.
+   * 'ai'    — Real AI virtual try-on provider result.
+   */
+  mode: 'demo' | 'ai';
+  /** Server-side processing time in milliseconds. */
+  processing_time_ms: number;
+}
+
+export interface TryOnErrorResponse {
+  detail: string;
 }
