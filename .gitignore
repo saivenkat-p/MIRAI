@@ -1,52 +1,15 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-.venv
+backend/.venv/
+.venv/
 venv/
-ENV/
-*.log
+__pycache__/
+*.pyc
 
-# Node / Frontend
+frontend/node_modules/
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+frontend/dist/
 dist/
-build/
-.next/
-.out/
+.vite/
 
-# Environment & Secrets
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# IDEs & System
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
+*.task
+frontend/public/models/pose_landmarker_lite.task
+*.log
