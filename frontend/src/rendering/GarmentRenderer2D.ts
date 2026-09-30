@@ -33,6 +33,7 @@
 import type { IGarmentRenderer } from './garmentRenderer';
 import type { TrackingFrame } from '../types/tracking';
 import type { Product } from '../types/api';
+import { getGarmentReference } from '../services/GarmentRegistry';
 
 // EMA smoothing factor: 0.35 gives responsive tracking without jitter
 const EMA_ALPHA = 0.35;
@@ -215,14 +216,15 @@ export class GarmentRenderer2D implements IGarmentRenderer {
   private ctx!: CanvasRenderingContext2D;
   private currentProduct: Product | null = null;
   private showSkeleton: boolean = true;
-  private enableGarmentMesh: boolean = false;
+  private enableGarmentMesh: boolean = true;
 
   setEnableGarmentMesh(enable: boolean): void {
     this.enableGarmentMesh = enable;
   }
 
-  // Master photographic linen texture (1024x1024)
-  private masterShirtImg: HTMLImageElement | null = null;
+  // Multi-garment texture cache & active image
+  private textureCache = new Map<string, HTMLImageElement>();
+  private activeGarmentImg: HTMLImageElement | null = null;
   private imagesLoaded: boolean = false;
 
   // Offscreen buffer for compositing and segmentation masking
@@ -239,15 +241,34 @@ export class GarmentRenderer2D implements IGarmentRenderer {
   }
 
   private preloadGarmentTextures(): void {
-    const master = new Image();
-    master.src = '/garments/camp_collar_linen_shirt.png';
-    master.onload = () => {
-      this.masterShirtImg = master;
-      this.imagesLoaded = true;
-    };
-    master.onerror = (e) => {
-      console.warn('[MIRAI] Could not load master linen shirt texture:', e);
-    };
+    const urls = [
+      '/garments/camp_collar_linen_shirt.png',
+      '/garments/oxford_cotton_shirt.png',
+      '/garments/cuban_collar_silk_shirt.png',
+      '/garments/supima_heavy_tee.png',
+      '/garments/tailored_mandarin_shirt.png',
+      '/garments/waffle_thermal_longsleeve.png',
+      '/garments/suede_minimalist_bomber.png',
+    ];
+
+    let loadedCount = 0;
+    for (const url of urls) {
+      const img = new Image();
+      img.src = url;
+      img.onload = () => {
+        this.textureCache.set(url, img);
+        loadedCount++;
+        if (url.includes('camp_collar_linen_shirt') || !this.activeGarmentImg) {
+          this.activeGarmentImg = img;
+        }
+        if (loadedCount >= 1) {
+          this.imagesLoaded = true;
+        }
+      };
+      img.onerror = (e) => {
+        console.warn(`[MIRAI] Could not load texture ${url}:`, e);
+      };
+    }
   }
 
   initialize(canvas: HTMLCanvasElement): void {
@@ -270,7 +291,31 @@ export class GarmentRenderer2D implements IGarmentRenderer {
   loadProduct(product: Product): Promise<void> {
     this.currentProduct = product;
     this.opacity = 0;
-    return Promise.resolve();
+
+    const ref = getGarmentReference(product.id);
+    const imgUrl = ref?.referenceImageUrl || '/garments/camp_collar_linen_shirt.png';
+
+    if (this.textureCache.has(imgUrl)) {
+      this.activeGarmentImg = this.textureCache.get(imgUrl)!;
+      this.imagesLoaded = true;
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = imgUrl;
+      img.onload = () => {
+        this.textureCache.set(imgUrl, img);
+        this.activeGarmentImg = img;
+        this.imagesLoaded = true;
+        resolve();
+      };
+      img.onerror = () => {
+        console.warn(`[MIRAI] Could not load garment asset ${imgUrl}, fallback to default`);
+        this.activeGarmentImg = this.textureCache.get('/garments/camp_collar_linen_shirt.png') || null;
+        resolve();
+      };
+    });
   }
 
   unloadGarment(): void {
@@ -351,9 +396,9 @@ export class GarmentRenderer2D implements IGarmentRenderer {
       this.drawSkeleton(toScreen);
     }
 
-    // ── Render Garment Mesh (DISABLED: MIRAI now uses Decart Lucy V-TON neural stream) ──
+    // ── Render Self-Hosted Continuous Garment Mesh ──
     const garment = selectedGarment ?? this.currentProduct;
-    if (this.enableGarmentMesh && garment && this.opacity >= 0.01 && this.imagesLoaded && this.masterShirtImg) {
+    if (this.enableGarmentMesh && garment && this.opacity >= 0.01 && this.imagesLoaded && this.activeGarmentImg) {
       this.renderUnifiedContinuousGarment(
         toScreen,
         tracking,
@@ -371,23 +416,41 @@ export class GarmentRenderer2D implements IGarmentRenderer {
     videoElement?: HTMLVideoElement,
     _maskCanvas?: HTMLCanvasElement | OffscreenCanvas
   ): void {
-    if (!this.masterShirtImg || !this.offscreenCtx || !this.offscreenCanvas) return;
+    if (!this.activeGarmentImg || !this.offscreenCtx || !this.offscreenCanvas) return;
 
     // 1. Core Pose Landmarks
-    // Landmark 11 (wearer's left shoulder) -> Screen Left (viewer's left)
-    // Landmark 12 (wearer's right shoulder) -> Screen Right (viewer's right)
-    const sL = toScreen(11);
-    const sR = toScreen(12);
-    if (!sL || !sR || sL.visibility < VISIBILITY_THRESHOLD || sR.visibility < VISIBILITY_THRESHOLD) {
+    // Screen-space invariant ordering:
+    // Determine screen-left (smaller x) and screen-right (larger x) shoulder
+    const p11 = toScreen(11);
+    const p12 = toScreen(12);
+    if (!p11 || !p12 || p11.visibility < VISIBILITY_THRESHOLD || p12.visibility < VISIBILITY_THRESHOLD) {
       return;
     }
 
-    const eL = toScreen(13); // Left Elbow
-    const eR = toScreen(14); // Right Elbow
-    const wL = toScreen(15); // Left Wrist
-    const wR = toScreen(16); // Right Wrist
-    const hL = toScreen(23); // Left Hip
-    const hR = toScreen(24); // Right Hip
+    let sL: ScreenPoint, sR: ScreenPoint;
+    let eL: ScreenPoint | null, eR: ScreenPoint | null;
+    let wL: ScreenPoint | null, wR: ScreenPoint | null;
+    let hL: ScreenPoint | null, hR: ScreenPoint | null;
+
+    if (p11.x <= p12.x) {
+      sL = p11;
+      sR = p12;
+      eL = toScreen(13); // Left Elbow
+      eR = toScreen(14); // Right Elbow
+      wL = toScreen(15); // Left Wrist
+      wR = toScreen(16); // Right Wrist
+      hL = toScreen(23); // Left Hip
+      hR = toScreen(24); // Right Hip
+    } else {
+      sL = p12;
+      sR = p11;
+      eL = toScreen(14); // Right Elbow on screen left
+      eR = toScreen(13); // Left Elbow on screen right
+      wL = toScreen(16);
+      wR = toScreen(15);
+      hL = toScreen(24);
+      hR = toScreen(23);
+    }
     const nose = toScreen(0);
     const mouthL = toScreen(9);
     const mouthR = toScreen(10);
@@ -660,7 +723,7 @@ export class GarmentRenderer2D implements IGarmentRenderer {
       const d2 = destMap[v2];
       if (!s0 || !s1 || !s2 || !d0 || !d1 || !d2) continue;
 
-      drawTexturedTriangle(oCtx, this.masterShirtImg, s0, s1, s2, d0, d1, d2);
+      drawTexturedTriangle(oCtx, this.activeGarmentImg, s0, s1, s2, d0, d1, d2);
     }
 
     // ── 11. CYLINDRICAL FABRIC SHADING PASS ──────────────────────────────

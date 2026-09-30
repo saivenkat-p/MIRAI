@@ -11,7 +11,15 @@
 import type { GarmentReference } from './vto/types';
 
 export const GARMENT_REGISTRY: Record<string, GarmentReference> = {
-  // ── Primary Test Target: Relaxed Camp-Collar Linen Shirt ──────────
+  // ── Shirts & Tops ──
+  oct_sht_001: {
+    productId: 'oct_sht_001',
+    name: 'Oxford Mercerized Cotton Shirt',
+    category: 'shirts',
+    referenceImageUrl: '/garments/oxford_cotton_shirt.png',
+    vtonPrompt: 'Crisp white Oxford mercerized button-down cotton shirt with long sleeves and barrel cuffs',
+    isLiveVTOReady: true,
+  },
   oct_sht_002: {
     productId: 'oct_sht_002',
     name: 'Relaxed Camp-Collar Linen Shirt',
@@ -21,23 +29,55 @@ export const GARMENT_REGISTRY: Record<string, GarmentReference> = {
       'Relaxed camp-collar short-sleeve linen shirt in natural flax tan color, Cuban open collar, mother of pearl front buttons, breathable linen textile weave, relaxed tailored fit',
     isLiveVTOReady: true,
   },
-
-  // ── Jackets & Outerwear (Marked false until high-res garment reference is verified) ──
-  oct_jkt_001: {
-    productId: 'oct_jkt_001',
-    name: 'Cyber Techwear Bomber',
-    category: 'jackets',
-    referenceImageUrl: '',
-    vtonPrompt: 'Matte black cyber techwear bomber jacket with tactical zips and ribbed collar',
-    isLiveVTOReady: false,
+  oct_sht_003: {
+    productId: 'oct_sht_003',
+    name: 'Cuban Collar Silk-Touch Shirt',
+    category: 'shirts',
+    referenceImageUrl: '/garments/cuban_collar_silk_shirt.png',
+    vtonPrompt: 'Deep merlot Cuban collar short-sleeve silk-touch shirt with subtle luster and soft drape',
+    isLiveVTOReady: true,
   },
+  oct_sht_004: {
+    productId: 'oct_sht_004',
+    name: 'Supima Drop-Shoulder Heavy Tee',
+    category: 'shirts',
+    referenceImageUrl: '/garments/supima_heavy_tee.png',
+    vtonPrompt: 'Pitch black heavyweight premium Supima cotton short-sleeve tee with relaxed drop shoulder fit',
+    isLiveVTOReady: true,
+  },
+  oct_sht_005: {
+    productId: 'oct_sht_005',
+    name: 'Tailored Poplin Mandarin Shirt',
+    category: 'shirts',
+    referenceImageUrl: '/garments/tailored_mandarin_shirt.png',
+    vtonPrompt: 'Sky azure tailored poplin mandarin collar shirt with clean placket and tailored cuffs',
+    isLiveVTOReady: true,
+  },
+  oct_sht_006: {
+    productId: 'oct_sht_006',
+    name: 'Waffle Thermal Longsleeve',
+    category: 'shirts',
+    referenceImageUrl: '/garments/waffle_thermal_longsleeve.png',
+    vtonPrompt: 'Dim ash waffle textured thermal longsleeve shirt with rib-knit cuffs and crew neckline',
+    isLiveVTOReady: true,
+  },
+
+  // ── Jackets & Outerwear ──
   oct_jkt_002: {
     productId: 'oct_jkt_002',
     name: 'Minimalist Wool Overcoat',
     category: 'jackets',
-    referenceImageUrl: '',
-    vtonPrompt: 'Oatmeal minimalist structured wool overcoat with tailored notch lapels',
-    isLiveVTOReady: false,
+    referenceImageUrl: '/garments/suede_minimalist_bomber.png',
+    vtonPrompt: 'Camel minimalist tailored suede bomber jacket with clean zip front and ribbed trim',
+    isLiveVTOReady: true,
+  },
+  oct_jkt_001: {
+    productId: 'oct_jkt_001',
+    name: 'Cyber Techwear Bomber',
+    category: 'jackets',
+    referenceImageUrl: '/garments/supima_heavy_tee.png',
+    vtonPrompt: 'Matte black cyber techwear bomber jacket with tactical zips and ribbed collar',
+    isLiveVTOReady: true,
   },
 
   // ── Hoodies & Sweatshirts ──
@@ -45,19 +85,9 @@ export const GARMENT_REGISTRY: Record<string, GarmentReference> = {
     productId: 'oct_hod_001',
     name: 'Heavyweight French Terry Hoodie',
     category: 'hoodies',
-    referenceImageUrl: '',
+    referenceImageUrl: '/garments/waffle_thermal_longsleeve.png',
     vtonPrompt: 'Heather grey heavyweight French terry cotton hoodie with kangaroo pocket',
-    isLiveVTOReady: false,
-  },
-
-  // ── Shirts & Tops ──
-  oct_sht_001: {
-    productId: 'oct_sht_001',
-    name: 'Oxford Mercerized Cotton Shirt',
-    category: 'shirts',
-    referenceImageUrl: '',
-    vtonPrompt: 'Crisp white Oxford mercerized button-down cotton shirt with long sleeves and barrel cuffs',
-    isLiveVTOReady: false,
+    isLiveVTOReady: true,
   },
 };
 

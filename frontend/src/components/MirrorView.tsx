@@ -1,21 +1,31 @@
 /**
- * MirrorView — the main MIRAI Intelligent Mirror experience.
+ * MIRAI — MirrorView
  *
- * Architecture:
+ * The Main MIRAI Intelligent Mirror Experience.
+ *
+ * Self-Hosted Virtual Try-On Pipeline:
  *   Hardware Camera Feed (HTMLVideoElement, scaleX(-1))
  *         │
- *         ├───► Decart Lucy V-TON Realtime Session (@decartai/sdk WebRTC)
+ *         ├───► MediaPipe Pose Landmarker (WASM/GPU, runs locally in browser)
  *         │            │
  *         │            ▼
- *         │     Transformed Neural Video Stream (MediaStream)
+ *         │     Live Normalized Landmarks & Segmentation Mask
  *         │            │
- *         │            ▼
- *         │     Primary Viewport Video Element (Live Neural Try-On)
- *         │
- *         └───► MediaPipe Pose Landmarker (Telemetry & Skeleton HUD overlay only)
+ *         └───► Kinematic Volumetric Garment Engine (GarmentRenderer2D)
+ *                      │
+ *                      ▼
+ *               Deformable 32-Triangle Fabric Mesh
+ *               + 3D Cylindrical Ambient Shading
+ *               + Dynamic Flexion Creasing
+ *               + Throat & Forearm Occlusion
+ *               (Canvas2D, Full 60 FPS Local Rendering)
  *
- * NOTE: The old 2D canvas polygon/mesh garment renderer is PERMANENTLY DISABLED.
- * Garments are synthesized in real-time by the neural video model.
+ * Retail Systems Integrated:
+ *   • Multi-Garment Wardrobe Catalog
+ *   • Real-Time Sizing & Store Inventory (Rack Locations)
+ *   • Saved Looks with Real QR Code Mobile Handoff
+ *   • In-Store Promotional Coupons & Loyalty Rewards
+ *   • Anonymized Customer Telemetry & Session Management
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -23,16 +33,16 @@ import { useCamera } from '../hooks/useCamera';
 import { useProducts } from '../hooks/useProducts';
 import { useLiveAR } from '../hooks/useLiveAR';
 import { useTryOn } from '../hooks/useTryOn';
-import { useDecartVTO } from '../hooks/useDecartVTO';
 import { ProductCatalog } from './ProductCatalog';
+import { ProductDetailCard } from './ProductDetailCard';
+import { SaveLookModal } from './SaveLookModal';
+import { CouponsModal } from './CouponsModal';
 import { TryOnOverlay } from './TryOnOverlay';
-import { DecartVTOProofModal } from './DecartVTOProofModal';
-import { isLiveVTOAvailable } from '../services/GarmentRegistry';
 import type { Product } from '../types/api';
-import { Activity, Eye, EyeOff, Zap } from 'lucide-react';
+import { Activity, Eye, EyeOff, Tag, LogOut } from 'lucide-react';
 
 export const MirrorView: React.FC = () => {
-  // ── Hardware Camera ────────────────────────────────────────────────────────
+  // ── Hardware Camera Feed ───────────────────────────────────────────────────
   const {
     videoRef,
     canvasRef,
@@ -42,28 +52,27 @@ export const MirrorView: React.FC = () => {
     captureFrame,
   } = useCamera();
 
-  // ── Decart Lucy V-TON Realtime Provider ─────────────────────────────────────
-  const {
-    remoteStream,
-    connectionState: vtoState,
-    isStreaming: isVTOStreaming,
-    error: vtoError,
-    startSession: startVTOSession,
-    stopSession: stopVTOSession,
-    changeGarment: changeVTOGarment,
-  } = useDecartVTO();
+  // ── Session State & Telemetry ──────────────────────────────────────────────
+  const [sessionId, setSessionId] = useState<string>(() => `sess_${Math.random().toString(36).substring(2, 9)}`);
 
-  const vtoVideoRef = useRef<HTMLVideoElement>(null);
-  const [isBenchmarkOpen, setIsBenchmarkOpen] = useState<boolean>(false);
-  const [vtoNotice, setVTONotice] = useState<string | null>(null);
-
-  // Bind remote transformed stream to VTO video element
+  // Initialize session on mount
   useEffect(() => {
-    if (vtoVideoRef.current && remoteStream) {
-      vtoVideoRef.current.srcObject = remoteStream;
-      vtoVideoRef.current.play().catch((e) => console.warn('[MIRAI] VTO video play error:', e));
-    }
-  }, [remoteStream]);
+    fetch('http://localhost:8000/api/v1/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mirror_id: 'MIRAI-SMART-MIRROR-01',
+        client_timestamp: Date.now(),
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.session_id) {
+          setSessionId(data.session_id);
+        }
+      })
+      .catch((err) => console.warn('[MIRAI] Backend session init notice:', err));
+  }, []);
 
   // ── Product Catalog ────────────────────────────────────────────────────────
   const {
@@ -74,16 +83,27 @@ export const MirrorView: React.FC = () => {
     selectCategory,
   } = useProducts();
 
-  // ── Live Pose Telemetry & Skeleton HUD ──────────────────────────────────────
+  // ── Live AR Virtual Try-On Engine ──────────────────────────────────────────
   const arCanvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isARActive, setIsARActive] = useState<boolean>(false);
+  const [selectedSize, setSelectedSize] = useState<string>('M');
+  const [isARActive, setIsARActive] = useState<boolean>(true);
   const [showSkeleton, setShowSkeleton] = useState<boolean>(false);
 
-  // Pose detection for skeleton and telemetry HUD (garment rendering disabled)
-  const { fps: realFPS } = useLiveAR(videoRef, arCanvasRef, null, false, showSkeleton);
+  // Drive self-hosted Kinematic Volumetric Garment Engine (60 FPS local canvas)
+  const { fps: realFPS } = useLiveAR(
+    videoRef,
+    arCanvasRef,
+    selectedProduct,
+    isARActive,
+    showSkeleton
+  );
 
-  // ── Optional Feature B: AI Photo Snapshot Modal ────────────────────────────
+  // ── Modals & Dialogs ───────────────────────────────────────────────────────
+  const [isSaveLookOpen, setIsSaveLookOpen] = useState<boolean>(false);
+  const [isCouponsOpen, setIsCouponsOpen] = useState<boolean>(false);
+
+  // ── AI Photo Snapshot Try-On (Secondary Feature) ───────────────────────────
   const {
     state: photoState,
     resultImage: photoResultImage,
@@ -101,62 +121,46 @@ export const MirrorView: React.FC = () => {
     startCamera();
   }, [startCamera]);
 
-  // ── Product Selection & Live VTO Handlers ──────────────────────────────────
+  // Record telemetry on product selection
   const handleSelectProduct = useCallback(
-    async (product: Product) => {
+    (product: Product) => {
       setSelectedProduct(product);
-      setVTONotice(null);
+      setSelectedSize(product.sizes[0] || 'M');
+      setIsARActive(true);
 
-      // Check if product has a verified Live VTO reference
-      const isReady = isLiveVTOAvailable(product.id);
-      if (isReady) {
-        setIsARActive(true);
-        const cameraStream = videoRef.current?.srcObject as MediaStream | null;
-        if (cameraStream) {
-          if (isVTOStreaming) {
-            await changeVTOGarment(product);
-          } else {
-            await startVTOSession(cameraStream, product);
-          }
-        }
-      } else {
-        setIsARActive(false);
-        stopVTOSession();
-        setVTONotice(
-          `Live VTO reference for "${product.name}" is pending. Use AI Photo Try-On.`
-        );
-      }
+      // Record selection event with backend
+      fetch('http://localhost:8000/api/v1/analytics/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          event_type: 'garment_selected',
+          product_id: product.id,
+          dwell_time_seconds: 0,
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
     },
-    [videoRef, isVTOStreaming, changeVTOGarment, startVTOSession, stopVTOSession]
+    [sessionId]
   );
 
-  const handleToggleAR = useCallback(async () => {
-    if (!selectedProduct) return;
-
-    if (isARActive) {
-      setIsARActive(false);
-      stopVTOSession();
-    } else {
-      if (isLiveVTOAvailable(selectedProduct.id)) {
-        setIsARActive(true);
-        const cameraStream = videoRef.current?.srcObject as MediaStream | null;
-        if (cameraStream) {
-          await startVTOSession(cameraStream, selectedProduct);
-        }
-      } else {
-        setVTONotice(
-          `Live VTO reference for "${selectedProduct.name}" is pending. Use AI Photo Try-On.`
-        );
-      }
-    }
-  }, [selectedProduct, isARActive, stopVTOSession, startVTOSession, videoRef]);
+  const handleToggleAR = useCallback(() => {
+    setIsARActive((v) => !v);
+  }, []);
 
   const handleClearSelection = useCallback(() => {
     setSelectedProduct(null);
-    setIsARActive(false);
-    stopVTOSession();
-    setVTONotice(null);
-  }, [stopVTOSession]);
+  }, []);
+
+  const handleEndSession = useCallback(() => {
+    fetch(`http://localhost:8000/api/v1/sessions/${sessionId}/end`, {
+      method: 'POST',
+    }).catch(() => {});
+
+    setSelectedProduct(null);
+    setIsARActive(true);
+    setSessionId(`sess_${Math.random().toString(36).substring(2, 9)}`);
+  }, [sessionId]);
 
   // ── AI Photo Try-On Handlers ───────────────────────────────────────────────
   const handlePhotoTryOn = useCallback(async () => {
@@ -170,25 +174,12 @@ export const MirrorView: React.FC = () => {
     });
   }, [selectedProduct, triggerPhotoTryOn, captureFrame]);
 
-  const handleTryAnotherPhoto = useCallback(() => {
-    resetPhotoTryOn();
-    setCapturedB64(null);
-  }, [resetPhotoTryOn]);
-
-  const handleRetryPhoto = useCallback(() => {
-    if (selectedProduct) {
-      handlePhotoTryOn();
-    }
-  }, [selectedProduct, handlePhotoTryOn]);
-
   const isPhotoOverlayOpen = photoState !== 'idle';
-  const localCameraStream = (videoRef.current?.srcObject as MediaStream | null) ?? null;
 
   return (
     <div className="relative w-full h-full bg-neutral-950 overflow-hidden select-none">
-      {/* ── Layer 1: Mirror Viewport (Live Neural VTO or Hardware Camera) ── */}
+      {/* ── Layer 1: Hardware Mirror Camera Viewport ── */}
       <div className="absolute inset-0">
-        {/* Hidden scratch canvas for photo snapshots */}
         <canvas ref={canvasRef} className="hidden" />
 
         {cameraError ? (
@@ -197,10 +188,10 @@ export const MirrorView: React.FC = () => {
             <p className="text-white font-semibold text-lg">Camera Access Required</p>
             <p className="text-neutral-400 text-sm mt-2 max-w-sm">
               {cameraError === 'permission_denied'
-                ? 'Please allow camera access in your browser settings to use the smart mirror.'
+                ? 'Please allow camera access in your browser settings to activate the mirror.'
                 : cameraError === 'not_found'
-                ? 'No camera found. Please connect a webcam.'
-                : 'Could not start camera stream.'}
+                ? 'No camera found. Please connect an HD webcam.'
+                : 'Could not start mirror camera stream.'}
             </p>
             <button
               onClick={startCamera}
@@ -209,17 +200,7 @@ export const MirrorView: React.FC = () => {
               Retry Camera
             </button>
           </div>
-        ) : isVTOStreaming && remoteStream ? (
-          /* Live Neural Transformed Video Stream (Decart Lucy V-TON) */
-          <video
-            ref={vtoVideoRef}
-            autoPlay
-            playsInline
-            className="w-full h-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
-          />
         ) : (
-          /* Default Hardware Camera Feed */
           <video
             ref={videoRef}
             autoPlay
@@ -231,55 +212,41 @@ export const MirrorView: React.FC = () => {
         )}
       </div>
 
-      {/* ── Layer 2: Optional Diagnostic Skeleton Overlay ── */}
+      {/* ── Layer 2: Self-Hosted Kinematic Volumetric Garment Canvas ── */}
       <canvas
         ref={arCanvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none z-10"
       />
 
-      {/* ── Layer 3: HUD Header Bar ── */}
+      {/* ── Layer 3: Enterprise Retail HUD Header Bar ── */}
       {!isPhotoOverlayOpen && (
-        <header className="absolute top-0 left-0 right-0 z-20 flex justify-between items-center mx-4 mt-4 px-5 py-3 bg-black/75 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl">
+        <header className="absolute top-0 left-0 right-0 z-20 flex justify-between items-center mx-4 mt-4 px-5 py-3 bg-black/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-black tracking-widest text-white">MIRAI</h1>
               <span className="px-2 py-0.5 rounded-full bg-violet-500/20 border border-violet-500/40 text-violet-300 text-[10px] font-bold">
-                SMART TRIAL ROOM
+                5G SMART TRIAL ROOM
               </span>
             </div>
             <p className="text-[11px] text-neutral-400 tracking-wider">OCTACEPT • Intelligent Mirror</p>
           </div>
 
-          {/* Telemetry & Provider Badges */}
+          {/* Engine & Retail Control Badges */}
           <div className="flex items-center gap-2.5">
-            {/* Realtime Neural Model Status */}
-            {isVTOStreaming ? (
+            {/* Self-Hosted VTO Engine Status */}
+            {selectedProduct && isARActive ? (
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-semibold shadow-sm shadow-emerald-900/30">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-mono">LUCY V-TON 3.5: STREAMING</span>
-              </div>
-            ) : vtoState === 'connecting' ? (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-950/80 border border-amber-500/30 text-amber-300 text-xs font-semibold">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                <span className="font-mono">CONNECTING VTO...</span>
+                <span className="font-mono">KVGE VTO: ACTIVE</span>
               </div>
             ) : (
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-900/80 border border-white/10 text-neutral-400 text-xs font-semibold">
-                <span className="w-2 h-2 rounded-full bg-neutral-600" />
-                <span className="font-mono">NEURAL VTO: STANDBY</span>
+                <span className="w-2 h-2 rounded-full bg-neutral-500" />
+                <span className="font-mono">KVGE: STANDBY</span>
               </div>
             )}
 
-            {/* Benchmark Suite Launcher Button */}
-            <button
-              onClick={() => setIsBenchmarkOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-violet-600/30 hover:bg-violet-600/50 text-violet-200 border border-violet-500/40 transition-all shadow-md active:scale-95"
-            >
-              <Zap size={13} className="text-violet-300" />
-              <span>Lucy V-TON Benchmark</span>
-            </button>
-
-            {/* Real FPS */}
+            {/* Real Measured FPS */}
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-neutral-300 text-xs font-mono">
               <Activity size={12} className="text-violet-400" />
               <span>{realFPS > 0 ? `${realFPS} FPS` : '-- FPS'}</span>
@@ -299,29 +266,47 @@ export const MirrorView: React.FC = () => {
               <span>Skeleton</span>
             </button>
 
+            {/* In-Store Promotions & Coupons Button */}
+            <button
+              onClick={() => setIsCouponsOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all shadow-sm active:scale-95"
+            >
+              <Tag size={13} />
+              <span>Coupons & Rewards</span>
+            </button>
+
             {/* Hardware Camera Indicator */}
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-neutral-300 text-xs font-mono">
               <span className={`w-2 h-2 rounded-full ${cameraReady ? 'bg-emerald-400' : 'bg-neutral-600'}`} />
               <span>{cameraReady ? 'CAM' : 'OFF'}</span>
             </div>
+
+            {/* End Session Button */}
+            <button
+              onClick={handleEndSession}
+              title="End session and reset mirror for next customer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/5 hover:bg-red-500/20 text-neutral-400 hover:text-red-300 border border-white/10 hover:border-red-500/30 transition-all active:scale-95"
+            >
+              <LogOut size={13} />
+              <span>Reset</span>
+            </button>
           </div>
         </header>
       )}
 
-      {/* ── Notice Banner (e.g. Garment in preparation or VTO error) ── */}
-      {(vtoNotice || vtoError) && !isPhotoOverlayOpen && (
-        <div className="absolute top-20 left-4 z-20 max-w-md p-3.5 rounded-2xl bg-amber-950/90 backdrop-blur-xl border border-amber-500/40 text-amber-200 text-xs shadow-2xl flex items-center justify-between gap-3">
-          <span className="leading-snug">{vtoError ? `Lucy V-TON: ${vtoError}` : vtoNotice}</span>
-          <button
-            onClick={() => setVTONotice(null)}
-            className="text-amber-400 hover:text-white font-bold text-xs"
-          >
-            Dismiss
-          </button>
-        </div>
+      {/* ── Layer 4: Contextual Product Details, Sizes & In-Store Inventory ── */}
+      {!isPhotoOverlayOpen && selectedProduct && (
+        <ProductDetailCard
+          product={selectedProduct}
+          selectedSize={selectedSize}
+          onSelectSize={setSelectedSize}
+          onSaveLook={() => setIsSaveLookOpen(true)}
+          onOpenCoupons={() => setIsCouponsOpen(true)}
+          onClear={handleClearSelection}
+        />
       )}
 
-      {/* ── Layer 4: Interactive Product Catalog (Right Side Wardrobe Panel) ── */}
+      {/* ── Layer 5: Interactive Wardrobe & Garment Catalog (Right Drawer) ── */}
       {!isPhotoOverlayOpen && (
         <ProductCatalog
           categories={categories}
@@ -338,7 +323,22 @@ export const MirrorView: React.FC = () => {
         />
       )}
 
-      {/* ── Layer 5: Optional Feature B (AI Photo Snapshot Modal) ── */}
+      {/* ── Layer 6: Save Look & Real QR Code Handoff Modal ── */}
+      <SaveLookModal
+        isOpen={isSaveLookOpen}
+        onClose={() => setIsSaveLookOpen(false)}
+        product={selectedProduct}
+        selectedSize={selectedSize}
+        sessionId={sessionId}
+      />
+
+      {/* ── Layer 7: In-Store Promotional Coupons & Rewards Modal ── */}
+      <CouponsModal
+        isOpen={isCouponsOpen}
+        onClose={() => setIsCouponsOpen(false)}
+      />
+
+      {/* ── Layer 8: Secondary AI Photo Snapshot Try-On Overlay ── */}
       <TryOnOverlay
         state={photoState}
         resultImage={photoResultImage}
@@ -347,16 +347,12 @@ export const MirrorView: React.FC = () => {
         error={photoError}
         product={selectedProduct}
         capturedPersonB64={capturedB64}
-        onTryAnother={handleTryAnotherPhoto}
-        onRetry={handleRetryPhoto}
-        onSaveLook={() => alert('Look saved to your fitting session!')}
-      />
-
-      {/* ── Layer 6: Phase 1 Decart Lucy V-TON Proof of Concept & Benchmark Modal ── */}
-      <DecartVTOProofModal
-        isOpen={isBenchmarkOpen}
-        onClose={() => setIsBenchmarkOpen(false)}
-        localStream={localCameraStream}
+        onTryAnother={() => {
+          resetPhotoTryOn();
+          setCapturedB64(null);
+        }}
+        onRetry={handlePhotoTryOn}
+        onSaveLook={() => setIsSaveLookOpen(true)}
       />
     </div>
   );
