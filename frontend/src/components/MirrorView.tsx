@@ -3,25 +3,14 @@
  *
  * The Main MIRAI Intelligent Mirror Experience.
  *
- * Self-Hosted Virtual Try-On Pipeline:
- *   Hardware Camera Feed (HTMLVideoElement, scaleX(-1))
- *         │
- *         ├───► MediaPipe Pose Landmarker (WASM/GPU, runs locally in browser)
- *         │            │
- *         │            ▼
- *         │     Live Normalized Landmarks & Segmentation Mask
- *         │            │
- *         └───► Kinematic Volumetric Garment Engine (GarmentRenderer2D)
- *                      │
- *                      ▼
- *               Deformable 32-Triangle Fabric Mesh
- *               + 3D Cylindrical Ambient Shading
- *               + Dynamic Flexion Creasing
- *               + Throat & Forearm Occlusion
- *               (Canvas2D, Full 60 FPS Local Rendering)
+ * Pluggable Live Virtual Try-On Pipeline:
+ *   1. Decart Lucy V-TON (Temporary External Prototype Provider)
+ *      Webcam MediaStream ──► WebRTC ──► Sub-60ms Neural Model (lucy-vton-3.5) ──► Mirror Viewport
+ *   2. Mirai KVGE (Proprietary Self-Hosted Edge Engine)
+ *      Webcam MediaStream ──► MediaPipe WASM ──► 32-Triangle Deformable Fabric Mesh + Lighting (60 FPS)
  *
  * Retail Systems Integrated:
- *   • Multi-Garment Wardrobe Catalog
+ *   • Multi-Garment Wardrobe Catalog with verified live reference assets
  *   • Real-Time Sizing & Store Inventory (Rack Locations)
  *   • Saved Looks with Real QR Code Mobile Handoff
  *   • In-Store Promotional Coupons & Loyalty Rewards
@@ -33,19 +22,24 @@ import { useCamera } from '../hooks/useCamera';
 import { useProducts } from '../hooks/useProducts';
 import { useLiveAR } from '../hooks/useLiveAR';
 import { useTryOn } from '../hooks/useTryOn';
+import { useDecartVTO } from '../hooks/useDecartVTO';
 import { ProductCatalog } from './ProductCatalog';
 import { ProductDetailCard } from './ProductDetailCard';
 import { SaveLookModal } from './SaveLookModal';
 import { CouponsModal } from './CouponsModal';
 import { TryOnOverlay } from './TryOnOverlay';
+import { VTOProviderModal } from './VTOProviderModal';
 import type { Product } from '../types/api';
-import { Activity, Eye, EyeOff, Tag, LogOut } from 'lucide-react';
+import type { VTOProviderType } from '../services/vto/types';
+import { isLiveVTOAvailable } from '../services/GarmentRegistry';
+import { Activity, Eye, EyeOff, Tag, LogOut, Zap, Shield, Cpu } from 'lucide-react';
 
 export const MirrorView: React.FC = () => {
   // ── Hardware Camera Feed ───────────────────────────────────────────────────
   const {
     videoRef,
     canvasRef,
+    stream: cameraStream,
     isReady: cameraReady,
     error: cameraError,
     startCamera,
@@ -83,19 +77,87 @@ export const MirrorView: React.FC = () => {
     selectCategory,
   } = useProducts();
 
-  // ── Live AR Virtual Try-On Engine ──────────────────────────────────────────
+  // ── VTO Engine Selection & Decart Live Prototype ───────────────────────────
+  const [activeProvider, setActiveProvider] = useState<VTOProviderType>('decart');
+  const [isProviderModalOpen, setIsProviderModalOpen] = useState<boolean>(false);
+  const decartVideoRef = useRef<HTMLVideoElement>(null);
+
+  const {
+    remoteStream: decartRemoteStream,
+    connectionState: decartState,
+    error: decartError,
+    apiKey: decartApiKey,
+    setApiKey: setDecartApiKey,
+    startSession: startDecartSession,
+    stopSession: stopDecartSession,
+    changeGarment: changeDecartGarment,
+  } = useDecartVTO();
+
+  // Route remote transformed WebRTC stream to Decart video viewport
+  useEffect(() => {
+    const video = decartVideoRef.current;
+    if (!video || !decartRemoteStream) return;
+
+    console.log('[MIRAI] Attaching Decart remoteStream to video element:', {
+      streamId: decartRemoteStream.id,
+      videoTracks: decartRemoteStream.getVideoTracks().map((t) => ({
+        id: t.id,
+        enabled: t.enabled,
+        muted: t.muted,
+        readyState: t.readyState,
+      })),
+    });
+
+    video.srcObject = decartRemoteStream;
+
+    const playRemoteVideo = async () => {
+      try {
+        await video.play();
+        console.log('[MIRAI] Decart remote video playback active:', {
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          paused: video.paused,
+        });
+      } catch (err) {
+        console.warn('[MIRAI] Decart video play() promise waiting:', err);
+      }
+    };
+
+    video.onloadedmetadata = () => {
+      console.log('[MIRAI] Decart video loadedmetadata:', {
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight,
+      });
+      playRemoteVideo();
+    };
+
+    decartRemoteStream.getVideoTracks().forEach((track) => {
+      track.onunmute = () => {
+        console.log('[MIRAI] Decart video track unmuted, frames arriving!');
+        playRemoteVideo();
+      };
+    });
+
+    playRemoteVideo();
+  }, [decartRemoteStream]);
+
+  // ── Live AR Virtual Try-On Engine (Mirai Self-Hosted KVGE) ─────────────────
   const arCanvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedSize, setSelectedSize] = useState<string>('M');
   const [isARActive, setIsARActive] = useState<boolean>(true);
   const [showSkeleton, setShowSkeleton] = useState<boolean>(false);
 
-  // Drive self-hosted Kinematic Volumetric Garment Engine (60 FPS local canvas)
+  // Drive self-hosted Kinematic Volumetric Garment Engine (60 FPS local canvas).
+  // When Decart is active, 2D mesh rendering is suppressed so it doesn't overlap the neural video stream,
+  // while body tracking & skeleton HUD remain completely functional.
+  const isKVGEMeshActive = isARActive && activeProvider === 'mirai_kvge';
+
   const { fps: realFPS } = useLiveAR(
     videoRef,
     arCanvasRef,
     selectedProduct,
-    isARActive,
+    isKVGEMeshActive,
     showSkeleton
   );
 
@@ -121,14 +183,14 @@ export const MirrorView: React.FC = () => {
     startCamera();
   }, [startCamera]);
 
-  // Record telemetry on product selection
+  // ── Product Selection Handler ──────────────────────────────────────────────
   const handleSelectProduct = useCallback(
-    (product: Product) => {
+    async (product: Product) => {
       setSelectedProduct(product);
       setSelectedSize(product.sizes[0] || 'M');
       setIsARActive(true);
 
-      // Record selection event with backend
+      // Record selection event with backend telemetry
       fetch('http://localhost:8000/api/v1/analytics/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,8 +202,38 @@ export const MirrorView: React.FC = () => {
           timestamp: Date.now(),
         }),
       }).catch(() => {});
+
+      // In Decart prototype mode: dynamically connect or switch garment
+      if (activeProvider === 'decart') {
+        const stream = cameraStream || (videoRef.current?.srcObject as MediaStream) || null;
+        if (stream && isLiveVTOAvailable(product.id)) {
+          if (decartState === 'connected') {
+            await changeDecartGarment(product);
+          } else {
+            await startDecartSession(stream, product);
+          }
+        }
+      }
     },
-    [sessionId]
+    [sessionId, activeProvider, cameraStream, videoRef, decartState, changeDecartGarment, startDecartSession]
+  );
+
+  // ── Provider Switching Handler ─────────────────────────────────────────────
+  const handleSelectProvider = useCallback(
+    async (provider: VTOProviderType) => {
+      setActiveProvider(provider);
+      if (provider === 'decart') {
+        if (selectedProduct) {
+          const stream = cameraStream || (videoRef.current?.srcObject as MediaStream) || null;
+          if (stream && isLiveVTOAvailable(selectedProduct.id)) {
+            await startDecartSession(stream, selectedProduct);
+          }
+        }
+      } else {
+        stopDecartSession();
+      }
+    },
+    [selectedProduct, cameraStream, videoRef, startDecartSession, stopDecartSession]
   );
 
   const handleToggleAR = useCallback(() => {
@@ -157,28 +249,36 @@ export const MirrorView: React.FC = () => {
       method: 'POST',
     }).catch(() => {});
 
+    stopDecartSession();
     setSelectedProduct(null);
     setIsARActive(true);
     setSessionId(`sess_${Math.random().toString(36).substring(2, 9)}`);
-  }, [sessionId]);
+  }, [sessionId, stopDecartSession]);
 
   // ── AI Photo Try-On Handlers ───────────────────────────────────────────────
   const handlePhotoTryOn = useCallback(async () => {
     if (!selectedProduct) return;
     setCapturedB64(null);
 
+    // Capture from currently active video stream (Decart remote stream or local camera)
+    const activeVideoEl =
+      activeProvider === 'decart' && decartRemoteStream && decartVideoRef.current
+        ? decartVideoRef.current
+        : videoRef.current;
+
     await triggerPhotoTryOn(selectedProduct, () => {
-      const frame = captureFrame();
+      const frame = captureFrame(activeVideoEl);
       setCapturedB64(frame);
       return frame;
     });
-  }, [selectedProduct, triggerPhotoTryOn, captureFrame]);
+  }, [selectedProduct, triggerPhotoTryOn, captureFrame, activeProvider, decartRemoteStream]);
 
   const isPhotoOverlayOpen = photoState !== 'idle';
+  const isDecartLive = activeProvider === 'decart' && Boolean(decartRemoteStream);
 
   return (
     <div className="relative w-full h-full bg-neutral-950 overflow-hidden select-none">
-      {/* ── Layer 1: Hardware Mirror Camera Viewport ── */}
+      {/* ── Layer 1: Hardware Mirror Camera Viewport & Neural Stream ── */}
       <div className="absolute inset-0">
         <canvas ref={canvasRef} className="hidden" />
 
@@ -201,18 +301,33 @@ export const MirrorView: React.FC = () => {
             </button>
           </div>
         ) : (
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-            style={{ transform: 'scaleX(-1)' }}
-          />
+          <>
+            {/* Layer 1A: Decart Lucy V-TON Neural Stream (Active on top when connected) */}
+            <video
+              ref={decartVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={`w-full h-full object-cover absolute inset-0 z-0 transition-opacity duration-300 ${
+                isDecartLive ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+              style={{ transform: 'scaleX(-1)' }}
+            />
+
+            {/* Layer 1B: Hardware Local Camera Stream (Always active underneath to keep MediaPipe running smoothly) */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-full h-full object-cover absolute inset-0 -z-10"
+              style={{ transform: 'scaleX(-1)' }}
+            />
+          </>
         )}
       </div>
 
-      {/* ── Layer 2: Self-Hosted Kinematic Volumetric Garment Canvas ── */}
+      {/* ── Layer 2: Self-Hosted Kinematic Volumetric Garment Canvas / Skeleton HUD ── */}
       <canvas
         ref={arCanvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none z-10"
@@ -233,24 +348,62 @@ export const MirrorView: React.FC = () => {
 
           {/* Engine & Retail Control Badges */}
           <div className="flex items-center gap-2.5">
-            {/* Self-Hosted VTO Engine Status */}
-            {selectedProduct && isARActive ? (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-semibold shadow-sm shadow-emerald-900/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-mono">KVGE VTO: ACTIVE</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-900/80 border border-white/10 text-neutral-400 text-xs font-semibold">
-                <span className="w-2 h-2 rounded-full bg-neutral-500" />
-                <span className="font-mono">KVGE: STANDBY</span>
-              </div>
-            )}
+            {/* Pluggable VTO Engine Status & Switcher Badge */}
+            <button
+              onClick={() => setIsProviderModalOpen(true)}
+              title="Click to configure VTO inference provider"
+              className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border transition-all active:scale-95 ${
+                activeProvider === 'decart'
+                  ? decartState === 'connected'
+                    ? 'bg-violet-950/80 border-violet-500/50 text-violet-300 shadow-sm shadow-violet-900/30'
+                    : decartState === 'connecting'
+                    ? 'bg-amber-950/80 border-amber-500/50 text-amber-300'
+                    : 'bg-neutral-900/80 border-violet-500/30 text-violet-400 hover:border-violet-500'
+                  : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-900/30'
+              }`}
+            >
+              {activeProvider === 'decart' ? (
+                <>
+                  <Zap size={13} className={decartState === 'connected' ? 'text-violet-400' : 'text-amber-400'} />
+                  <span className="font-mono">
+                    {decartState === 'connected'
+                      ? 'DECART VTO: ACTIVE'
+                      : decartState === 'connecting'
+                      ? 'DECART: CONNECTING...'
+                      : 'DECART VTO: PROTOTYPE'}
+                  </span>
+                  <span className="text-[9px] text-amber-300 font-bold px-1.5 py-0.5 rounded bg-amber-500/20">
+                    TEMP
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Shield size={13} className="text-emerald-400" />
+                  <span className="font-mono">
+                    {selectedProduct && isARActive ? 'MIRAI KVGE: ACTIVE' : 'MIRAI KVGE: READY'}
+                  </span>
+                  <span className="text-[9px] text-emerald-300 font-bold px-1.5 py-0.5 rounded bg-emerald-500/20">
+                    SELF-HOSTED
+                  </span>
+                </>
+              )}
+            </button>
 
             {/* Real Measured FPS */}
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-neutral-300 text-xs font-mono">
               <Activity size={12} className="text-violet-400" />
               <span>{realFPS > 0 ? `${realFPS} FPS` : '-- FPS'}</span>
             </div>
+
+            {/* Engine Architecture & Key Modal Toggle */}
+            <button
+              onClick={() => setIsProviderModalOpen(true)}
+              title="Configure VTO Inference Engine & API Keys"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-neutral-300 border border-white/10 transition-all active:scale-95"
+            >
+              <Cpu size={13} className="text-violet-400" />
+              <span>Engine</span>
+            </button>
 
             {/* Skeleton Overlay Toggle */}
             <button
@@ -292,6 +445,28 @@ export const MirrorView: React.FC = () => {
             </button>
           </div>
         </header>
+      )}
+
+      {/* ── Decart Key Alert Notification (if key missing in prototype mode) ── */}
+      {activeProvider === 'decart' && !decartApiKey && selectedProduct && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-xl bg-amber-950/90 border border-amber-500/50 backdrop-blur-md shadow-xl flex items-center gap-3">
+          <Zap size={14} className="text-amber-400 shrink-0" />
+          <span className="text-xs text-amber-200">
+            Decart API Key required for live prototype streaming.
+          </span>
+          <button
+            onClick={() => setIsProviderModalOpen(true)}
+            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold rounded-lg transition-all"
+          >
+            Enter Key
+          </button>
+          <button
+            onClick={() => handleSelectProvider('mirai_kvge')}
+            className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold rounded-lg transition-all"
+          >
+            Switch to Mirai KVGE
+          </button>
+        </div>
       )}
 
       {/* ── Layer 4: Contextual Product Details, Sizes & In-Store Inventory ── */}
@@ -353,6 +528,18 @@ export const MirrorView: React.FC = () => {
         }}
         onRetry={handlePhotoTryOn}
         onSaveLook={() => setIsSaveLookOpen(true)}
+      />
+
+      {/* ── Layer 9: VTO Provider Architecture & Credentials Modal ── */}
+      <VTOProviderModal
+        isOpen={isProviderModalOpen}
+        onClose={() => setIsProviderModalOpen(false)}
+        activeProvider={activeProvider}
+        onSelectProvider={handleSelectProvider}
+        decartState={decartState}
+        decartApiKey={decartApiKey}
+        onSaveApiKey={setDecartApiKey}
+        decartError={decartError}
       />
     </div>
   );

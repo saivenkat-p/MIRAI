@@ -13,3 +13,9 @@ dist/
 *.task
 frontend/public/models/pose_landmarker_lite.task
 *.log
+
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+*.env

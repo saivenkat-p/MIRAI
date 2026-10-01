@@ -22,11 +22,12 @@ export type CameraError =
 export interface UseCameraReturn {
   videoRef: React.RefObject<HTMLVideoElement>;
   canvasRef: React.RefObject<HTMLCanvasElement>;
+  stream: MediaStream | null;
   isReady: boolean;
   error: CameraError | null;
   startCamera: () => Promise<void>;
   stopCamera: () => void;
-  captureFrame: () => string | null;
+  captureFrame: (targetVideo?: HTMLVideoElement | null) => string | null;
 }
 
 export function useCamera(): UseCameraReturn {
@@ -88,8 +89,8 @@ export function useCamera(): UseCameraReturn {
    * Returns a base-64 JPEG string (WITHOUT the data-URI prefix).
    * Returns null if camera is not ready.
    */
-  const captureFrame = useCallback((): string | null => {
-    const video = videoRef.current;
+  const captureFrame = useCallback((targetVideo?: HTMLVideoElement | null): string | null => {
+    const video = targetVideo || videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || !isReady) return null;
 
@@ -112,5 +113,5 @@ export function useCamera(): UseCameraReturn {
     return dataUrl.split(',')[1] ?? null;
   }, [isReady]);
 
-  return { videoRef, canvasRef, isReady, error, startCamera, stopCamera, captureFrame };
+  return { videoRef, canvasRef, stream: streamRef.current, isReady, error, startCamera, stopCamera, captureFrame };
 }
