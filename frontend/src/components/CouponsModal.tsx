@@ -253,3 +253,6 @@ export const CouponsModal: React.FC<CouponsModalProps> = ({ isOpen, onClose }) =
     </div>
   );
 };
+
+export default CouponsModal;
+

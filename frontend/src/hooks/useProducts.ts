@@ -16,6 +16,7 @@ export interface UseProductsReturn {
   loading: boolean;
   error: string | null;
   selectCategory: (id: string | null) => void;
+  retry: () => void;
 }
 
 export function useProducts(): UseProductsReturn {
@@ -25,31 +26,40 @@ export function useProducts(): UseProductsReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load categories once on mount
-  useEffect(() => {
-    let cancelled = false;
+  const loadData = useCallback(() => {
+    setLoading(true);
+    setError(null);
     fetchCategories()
       .then((cats) => {
-        if (cancelled) return;
         const sorted = [...cats].sort((a, b) => a.display_order - b.display_order);
         setCategories(sorted);
-        // Auto-select first category
-        if (sorted.length > 0) setActiveCategoryId(sorted[0].id);
+        const targetCatId = activeCategoryId || (sorted.length > 0 ? sorted[0].id : undefined);
+        if (targetCatId && !activeCategoryId) {
+          setActiveCategoryId(targetCatId);
+        }
+        return fetchProducts(targetCatId);
+      })
+      .then((prods) => {
+        setProducts(prods);
+        setLoading(false);
       })
       .catch((err: Error) => {
-        if (cancelled) return;
         setError(err.message ?? 'Failed to load categories.');
         setLoading(false);
       });
-    return () => { cancelled = true; };
-  }, []);
+  }, [activeCategoryId]);
+
+  // Load categories and products once on mount
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Load products when active category changes
   useEffect(() => {
+    if (!activeCategoryId) return;
     let cancelled = false;
     setLoading(true);
-    setError(null);
-    fetchProducts(activeCategoryId ?? undefined)
+    fetchProducts(activeCategoryId)
       .then((prods) => {
         if (cancelled) return;
         setProducts(prods);
@@ -67,5 +77,5 @@ export function useProducts(): UseProductsReturn {
     setActiveCategoryId(id);
   }, []);
 
-  return { categories, products, activeCategoryId, loading, error, selectCategory };
+  return { categories, products, activeCategoryId, loading, error, selectCategory, retry: loadData };
 }

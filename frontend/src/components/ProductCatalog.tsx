@@ -25,6 +25,8 @@ interface ProductCatalogProps {
   activeCategoryId: string | null;
   selectedProduct: Product | null;
   loading: boolean;
+  error?: string | null;
+  onRetry?: () => void;
   isARActive: boolean;
   onSelectCategory: (id: string) => void;
   onSelectProduct: (product: Product) => void;
@@ -55,6 +57,8 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
   activeCategoryId,
   selectedProduct,
   loading,
+  error,
+  onRetry,
   isARActive,
   onSelectCategory,
   onSelectProduct,
@@ -243,6 +247,19 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({
               className="h-20 rounded-2xl bg-white/5 animate-pulse"
             />
           ))
+        ) : error && products.length === 0 ? (
+          <div className="py-8 px-4 text-center">
+            <p className="text-amber-400 text-xs font-semibold mb-1">Backend Connection Issue</p>
+            <p className="text-neutral-400 text-[11px] mb-3">{error}</p>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-semibold transition-all active:scale-95"
+              >
+                Reconnect Catalog
+              </button>
+            )}
+          </div>
         ) : products.length === 0 ? (
           <p className="text-neutral-500 text-xs py-8 text-center">No products found in this category.</p>
         ) : (

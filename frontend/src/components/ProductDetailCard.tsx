@@ -167,3 +167,6 @@ export const ProductDetailCard: React.FC<ProductDetailCardProps> = ({
     </div>
   );
 };
+
+export default ProductDetailCard;
+

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DecartLucyVTOProvider } from '../services/vto/DecartLucyVTOProvider';
 import type { GarmentReference, VTOConnectionState } from '../services/vto/types';
 import { getGarmentReference } from '../services/GarmentRegistry';
+import { API_BASE_URL } from '../services/api';
 import type { Product } from '../types/api';
 
 const LOCAL_STORAGE_DECART_KEY = 'mirai_decart_api_key';
@@ -47,7 +48,7 @@ export function useDecartVTO(): UseDecartVTOResult {
   // Fetch credentials from backend environment if not present in client
   useEffect(() => {
     if (!apiKey) {
-      fetch('http://localhost:8000/api/v1/vto/credentials')
+      fetch(`${API_BASE_URL}/api/v1/vto/credentials`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data?.api_key) {

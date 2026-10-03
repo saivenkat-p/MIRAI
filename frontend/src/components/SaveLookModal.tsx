@@ -139,3 +139,6 @@ export const SaveLookModal: React.FC<SaveLookModalProps> = ({
     </div>
   );
 };
+
+export default SaveLookModal;
+

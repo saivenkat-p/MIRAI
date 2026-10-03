@@ -32,6 +32,7 @@ import { VTOProviderModal } from './VTOProviderModal';
 import type { Product } from '../types/api';
 import type { VTOProviderType } from '../services/vto/types';
 import { isLiveVTOAvailable } from '../services/GarmentRegistry';
+import { API_BASE_URL } from '../services/api';
 import { Activity, Eye, EyeOff, Tag, LogOut, Zap, Shield, Cpu } from 'lucide-react';
 
 export const MirrorView: React.FC = () => {
@@ -51,7 +52,7 @@ export const MirrorView: React.FC = () => {
 
   // Initialize session on mount
   useEffect(() => {
-    fetch('http://localhost:8000/api/v1/sessions', {
+    fetch(`${API_BASE_URL}/api/v1/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -74,7 +75,9 @@ export const MirrorView: React.FC = () => {
     products,
     activeCategoryId,
     loading: catalogLoading,
+    error: catalogError,
     selectCategory,
+    retry: retryCatalog,
   } = useProducts();
 
   // ── VTO Engine Selection & Decart Live Prototype ───────────────────────────
@@ -95,6 +98,9 @@ export const MirrorView: React.FC = () => {
 
   // Route remote transformed WebRTC stream to Decart video viewport
   useEffect(() => {
+    if (decartVideoRef.current && decartRemoteStream) {
+      decartVideoRef.current.srcObject = decartRemoteStream;
+    }
     const video = decartVideoRef.current;
     if (!video || !decartRemoteStream) return;
 
@@ -191,7 +197,7 @@ export const MirrorView: React.FC = () => {
       setIsARActive(true);
 
       // Record selection event with backend telemetry
-      fetch('http://localhost:8000/api/v1/analytics/events', {
+      fetch(`${API_BASE_URL}/api/v1/analytics/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -245,7 +251,7 @@ export const MirrorView: React.FC = () => {
   }, []);
 
   const handleEndSession = useCallback(() => {
-    fetch(`http://localhost:8000/api/v1/sessions/${sessionId}/end`, {
+    fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/end`, {
       method: 'POST',
     }).catch(() => {});
 
@@ -302,7 +308,7 @@ export const MirrorView: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Layer 1A: Decart Lucy V-TON Neural Stream (Active on top when connected) */}
+            {/* Layer 1A: Decart Lucy V-TON Neural Stream (Visible when connected) */}
             <video
               ref={decartVideoRef}
               autoPlay
@@ -489,6 +495,8 @@ export const MirrorView: React.FC = () => {
           activeCategoryId={activeCategoryId}
           selectedProduct={selectedProduct}
           loading={catalogLoading}
+          error={catalogError}
+          onRetry={retryCatalog}
           isARActive={isARActive}
           onSelectCategory={selectCategory}
           onSelectProduct={handleSelectProduct}
